@@ -3,7 +3,8 @@ name: 每日股票分析
 on:
   # 定时触发 - 每周三、周五北京时间 18:00 (UTC 10:00)
   schedule:
-    - cron: '0 10 * * 3,5'     # 周三、周五，UTC 10:00 = 北京时间 18:00
+    - cron: '0 10 * * 3'       # 周三周中观察
+    - cron: '0 10 * * 5'       # 周五周度复盘
   
   # 手动触发
   workflow_dispatch:
@@ -17,6 +18,14 @@ on:
           - full          # 完整分析（股票+大盘）
           - market-only   # 仅大盘复盘
           - stocks-only   # 仅股票分析
+      report_period:
+        description: '完整 A 股分析的报告周期'
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - midweek
+          - weekly
       force_run:
         description: '强制运行（跳过交易日检查）'
         required: false
@@ -62,6 +71,8 @@ jobs:
       
       - name: 执行股票分析
         env:
+          REPORT_PERIOD: ${{ inputs.report_period || 'daily' }}
+          SCHEDULE_CRON: ${{ github.event.schedule }}
           # ==========================================
           # AI 配置
           # ==========================================
@@ -551,11 +562,19 @@ jobs:
             echo "⚡ 已启用强制运行模式（跳过交易日检查）"
           fi
 
+          # 定时任务按触发规则选报告，避免以 runner 的实际启动星期判断。
+          case "$SCHEDULE_CRON" in
+            '0 10 * * 3') REPORT_PERIOD=midweek ;;
+            '0 10 * * 5') REPORT_PERIOD=weekly ;;
+          esac
+
           # 执行分析
           if [ "$MODE" = "market-only" ]; then
             python main.py --market-review $FORCE_RUN_ARG
           elif [ "$MODE" = "stocks-only" ]; then
             python main.py --no-market-review $FORCE_RUN_ARG
+          elif [ "$REPORT_PERIOD" != "daily" ]; then
+            python main.py --report-period "$REPORT_PERIOD" $FORCE_RUN_ARG
           else
             python main.py $FORCE_RUN_ARG
           fi

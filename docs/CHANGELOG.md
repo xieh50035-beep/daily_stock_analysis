@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [改进] GitHub Actions 周三发送 A 股周中趋势观察，周五发送本周复盘与下周展望，按交易日日线汇总指数涨跌、量能和申万一级行业持续性，披露数据与分析缺失并标记关键运行失败。
+
 - [修复] 启动日志不再对 `--stocks` / `--portfolio` / `--no-notify` 已覆盖的配置项告警；单一日线数据源失败（含 Eastmoney 股票与 ETF 请求）降为 WARNING，普通股票及 A 股指数全部日线数据源失败仍为 ERROR；LLM 返回与调试日志显示实际响应模型（含流式响应），依据实际调用路由标注回退，避免将别名、供应商前缀和日期版本差异误报为回退
 - [文档] 修正 DeepSeek 默认模型说明，明确 Gemini API 与 Vertex AI 的模型生命周期及验证边界。
 - [修复] 深度研究合成阶段预算增至受剩余整体预算限制的 120 秒；阶段/provider 超时保留阶段、实际耗时与原始原因，研究 API 不再误报整体预算耗尽或清零已知 token 用量（#2475）。

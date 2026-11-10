@@ -345,6 +345,10 @@ docker-compose -f ./docker/docker-compose.yml up -d
 
 **The simplest option!** No server needed, leverages GitHub's free compute resources.
 
+This repository schedules runs on Wednesdays and Fridays at 18:00 Beijing time. With A-share market review enabled, Wednesday reports cover the week through midweek with Thursday and Friday watch conditions. Friday reports cover the full week and provide watch conditions for the following week. Manual `full` runs accept `report_period` values `daily` (default), `midweek`, or `weekly`. The market window ends on the most recent corresponding weekday. Stock analysis uses the run date, and the existing trading-day check still applies.
+
+Index returns use daily closes relative to the previous week's last close. Volume is compared on a per-session basis, with total volume change also shown on Fridays. Industry persistence uses dated Shenwan level-one industry returns and counts positive sessions. Partial coverage is flagged at the top and in the logs. The run fails if every index return is missing, a stock analysis is missing, saving fails, or weekly email delivery fails. Available reports still use the existing notification and artifact upload paths.
+
 ### Advantages
 - ✅ **Completely free** (2000 minutes/month)
 - ✅ **No server needed**
