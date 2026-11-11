@@ -377,6 +377,19 @@ def _akshare_call_with_timeout(
     raise value
 
 
+def fetch_sw_industry_daily(start_date, end_date) -> pd.DataFrame:
+    """Fetch dated Shenwan level-one industry returns with the history timeout."""
+    import akshare as ak
+
+    return _akshare_call_with_timeout(
+        ak.index_analysis_daily_sw,
+        call_name="ak.index_analysis_daily_sw",
+        symbol="一级行业",
+        start_date=start_date.strftime("%Y%m%d"),
+        end_date=end_date.strftime("%Y%m%d"),
+    )
+
+
 def _akshare_timeout_worker(conn, func, args, kwargs) -> None:
     try:
         conn.send((True, func(*args, **kwargs)))

@@ -387,6 +387,12 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        '--report-period',
+        choices=('midweek', 'weekly'),
+        help='完整分析时生成 A 股周中观察或周度复盘，默认生成当日复盘',
+    )
+
+    parser.add_argument(
         '--no-market-review',
         action='store_true',
         help='跳过大盘复盘分析'
@@ -913,6 +919,19 @@ def _all_stock_targets_succeeded(
         return False
 
 
+def _send_weekly_report(notifier, content: str) -> bool:
+    dispatch = notifier.send_with_results(
+        content, email_send_to_all=True, route_type="report",
+    )
+    failed_channels = [attempt.channel for attempt in dispatch.channel_results if not attempt.success]
+    if not dispatch.success or "email" in failed_channels:
+        logger.error("[weekly_report] notification_failed status=%s channels=%s", dispatch.status, failed_channels)
+        return False
+    if failed_channels:
+        logger.warning("[weekly_report] notification_partial_failure channels=%s", failed_channels)
+    return True
+
+
 def run_full_analysis(
     config: Config,
     args: argparse.Namespace,
@@ -1054,6 +1073,14 @@ def run_full_analysis(
             and not args.no_market_review
             and (market_review_region or '') != ''
         )
+        report_period = getattr(args, "report_period", None)
+        weekly_report = (
+            report_period in ("midweek", "weekly")
+            and should_run_market_review
+            and market_review_region == "cn"
+            and not args.dry_run
+        )
+        weekly_failed = False
         if (
             not getattr(args, "dry_run", False)
             and not stock_codes
@@ -1152,7 +1179,28 @@ def run_full_analysis(
         analysis_delay = getattr(config, 'analysis_delay', 0)
 
         # 2. 运行大盘复盘（如果启用且不是仅个股模式）
-        if should_run_market_review:
+        if weekly_report:
+            from src.weekly_market_report import build_weekly_market_report
+
+            market_report, weekly_failed, warnings = build_weekly_market_report(
+                report_period, analysis_reference_time, pipeline.fetcher_manager, stock_codes, results,
+            )
+            for warning in warnings:
+                logger.warning("[weekly_report] data_or_analysis_incomplete: %s", warning)
+            report_date = analysis_reference_time.astimezone(timezone(timedelta(hours=8))).strftime("%Y%m%d")
+            try:
+                path = pipeline.notifier.save_report_to_file(
+                    market_report, f"market_{report_period}_{report_date}.md",
+                )
+                if not path:
+                    weekly_failed = True
+                    logger.error("[weekly_report] report_save_failed")
+            except OSError:
+                weekly_failed = True
+                logger.exception("[weekly_report] report_save_failed")
+            if not merge_notification and not args.no_notify:
+                weekly_failed = not _send_weekly_report(pipeline.notifier, market_report) or weekly_failed
+        elif should_run_market_review:
             schedule_mode = bool(
                 getattr(args, 'schedule', False)
                 or getattr(config, 'schedule_enabled', False)
@@ -1276,7 +1324,7 @@ def run_full_analysis(
         if merge_notification and (results or market_report) and not args.no_notify:
             parts = []
             if market_report:
-                parts.append(f"# 📈 大盘复盘\n\n{market_report}")
+                parts.append(market_report if weekly_report else f"# 📈 大盘复盘\n\n{market_report}")
             if results:
                 dashboard_content = pipeline.notifier.generate_aggregate_report(
                     results,
@@ -1285,7 +1333,9 @@ def run_full_analysis(
                 parts.append(f"# 🚀 个股决策仪表盘\n\n{dashboard_content}")
             if parts:
                 combined_content = "\n\n---\n\n".join(parts)
-                if pipeline.notifier.is_available():
+                if weekly_report:
+                    weekly_failed = not _send_weekly_report(pipeline.notifier, combined_content) or weekly_failed
+                elif pipeline.notifier.is_available():
                     if pipeline.notifier.send(combined_content, email_send_to_all=True, route_type="report"):
                         logger.info("已合并推送（个股+大盘复盘）")
                     else:
@@ -1345,7 +1395,10 @@ def run_full_analysis(
         except Exception as e:
             logger.error(f"飞书文档生成失败: {e}")
 
-        final_result = (
+        if weekly_failed:
+            _LAST_ANALYSIS_FAILURE_REASON = "weekly_report_incomplete"
+            logger.error("[weekly_report] weekly_report_incomplete")
+        final_result = not weekly_failed and (
             deferred_failure_result
             if deferred_failure_result is not None
             else True
@@ -2112,7 +2165,7 @@ def main() -> int:
                 if analysis_ok is False:
                     if start_serve:
                         logger.error("启动时分析执行失败，Web/API 服务继续运行。")
-                    elif _LAST_ANALYSIS_FAILURE_REASON in {
+                    elif getattr(args, "report_period", None) or _LAST_ANALYSIS_FAILURE_REASON in {
                         "no_report",
                         "empty_stock_list",
                         "report_save_failed",
