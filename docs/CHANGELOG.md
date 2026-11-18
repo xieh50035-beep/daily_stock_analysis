@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [chore] 按用户要求于 2026-11-18 暂停股票分析工作流的周三、周五自动定时触发，保留手动运行入口及可恢复的 cron 注释。
+
 - [改进] GitHub Actions 周三发送 A 股周中趋势观察，周五发送本周复盘与下周展望，按交易日日线汇总指数涨跌、量能和申万一级行业持续性，披露数据与分析缺失并标记关键运行失败。
 
 - [修复] 启动日志不再对 `--stocks` / `--portfolio` / `--no-notify` 已覆盖的配置项告警；单一日线数据源失败（含 Eastmoney 股票与 ETF 请求）降为 WARNING，普通股票及 A 股指数全部日线数据源失败仍为 ERROR；LLM 返回与调试日志显示实际响应模型（含流式响应），依据实际调用路由标注回退，避免将别名、供应商前缀和日期版本差异误报为回退
